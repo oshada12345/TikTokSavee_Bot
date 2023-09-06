@@ -9,7 +9,17 @@ import telebot
 from telebot.async_telebot import AsyncTeleBot
 from telebot import types
 from dotenv import load_dotenv, find_dotenv
-from typing import Optional, Generator
+from ast import literal_eval
+import re
+import sys
+import random
+from base64 import b64decode
+try:
+    import requests
+    import bs4
+except ImportError:
+    sys.exit('- module not installed !')
+
 
 load_dotenv(find_dotenv())
 bot = AsyncTeleBot(os.getenv('TOKEN_BOT'))
@@ -85,6 +95,7 @@ async def command_start(message):
     if data is None:
         sql.execute("INSERT INTO users VALUES (?,?,?)", (None, tg_id, date))
         db.commit()
+        await bot.send_message(admin_id,f'👤 New user : {message.chat.id}')
     img = open("img/start.png", "rb")
     await bot.send_photo(message.chat.id, img,
                          caption='<b>Привет! Добро пожаловать к нам в видеобот TikTokSavee!👋</b>\n\nМы рады видеть тебя здесь. Просто дайте мне ссылку на видео с TikTok, и я отправлю вам это видео без водяных знаков.\n\n<b>Наслаждайтесь просмотром! 🎉</b>\n Если у тебя есть какие-либо вопросы или запросы, не стесняйся спрашивать: <b>@maruvvvs</b> 😊📹',
@@ -102,33 +113,30 @@ async def process(message):
         sticker = await bot.send_sticker(message.chat.id,
                                          "CAACAgIAAxkBAAEKIxtk6pqNbeyXirz3RDS4vp2oXIjzyQACeQAD5KDOB6RRas-jTv2HMAQ")
         loading = await bot.send_message(message.chat.id, '🕗 Ожидайте видео скачивается...')
-        video = await download(message.text)
-
+        testing = tiktok_downloader()
+        if testing.musicaldown(message.text, "video") is True:
+            print("Видео загружено")
+        video = open('video.mp4','rb')
         try:
 
+            await bot.send_video(message.chat.id, video, caption='🎉 Поздравляю, видео успешно скачено!\n\n😊 Скачано с помощью <b>@saving_tt_video_bot</b>',parse_mode='html')
             await bot.delete_message(message.chat.id, loading.message_id)
             await bot.delete_message(message.chat.id, sticker.message_id)
-            await bot.send_video(message.chat.id, video, caption='🎉 Поздравляю, видео успешно скачено!')
+
 
         except:
-            sticker = await bot.send_sticker(message.chat.id,
-                                             "CAACAgIAAxkBAAEKKWhk7fzCtX_iaxOxfrN345XD23_65QACbwAD5KDOBwj7OOarOaTFMAQ")
-            loading = await bot.send_message(message.chat.id, '😅 Ого ,тяжеленький, ожидайте видео скачивается...')
-            response = requests.get(video)
-            with open("ttsavee.mp4", "wb") as file:
-                file.write(response.content)
-            result = open("ttsavee.mp4", 'rb')
-
-            await bot.send_document(message.chat.id, result, caption='🎉 Поздравляю, видео успешно скачено!')
             await bot.delete_message(message.chat.id, loading.message_id)
             await bot.delete_message(message.chat.id, sticker.message_id)
-            os.remove("ttsavee.mp4")
+            await bot.send_sticker(message.chat.id,
+                                             "CAACAgIAAxkBAAEKPMZk-KebbYWGOpgXZStXyiM8SUjfLgACZwAD5KDOB6GjeJZ2Piz9MAQ")
+            await bot.send_message(message.chat.id, '🥺 Ошибка при скачивания видео ,попробуйте снова...')
+            # os.remove("video.mp4")
 
     else:
         await bot.send_message(message.chat.id,
                                '⛔️ В данный момент возможность загрузки видео доступна только из <b>TikTok</b>',
                                parse_mode='html')
-
+    os.remove("video.mp4")
 
 @bot.callback_query_handler(func=lambda callback: callback.data == "subchanneldone")
 async def callback_handler(callback):
@@ -142,5 +150,65 @@ async def callback_handler(callback):
                                '👻 Для доступа к боту,необходимо подписаться на канал',
                                reply_markup=keyboard)
 
+
+class tiktok_downloader:
+    def __init__(self):
+        pass
+
+    def musicaldown(self, url, output_name):
+        try:
+            """url: tiktok video url
+            output_name: output video (.mp4). Example : video.mp4
+            """
+            ses = requests.Session()
+            server_url = 'https://musicaldown.com/'
+            headers = {
+                "Host": "musicaldown.com",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:103.0) Gecko/20100101 Firefox/103.0",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "DNT": "1",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+                "TE": "trailers"
+            }
+            ses.headers.update(headers)
+            req = ses.get(server_url)
+            data = {}
+            parse = bs4.BeautifulSoup(req.text, 'html.parser')
+            get_all_input = parse.findAll('input')
+            for i in get_all_input:
+                if i.get("id") == "link_url":
+                    data[i.get("name")] = url
+                else:
+                    data[i.get("name")] = i.get("value")
+            post_url = server_url + "id/download"
+            req_post = ses.post(post_url, data=data, allow_redirects=True)
+            if req_post.status_code == 302 or 'This video is currently not available' in req_post.text or 'Video is private or removed!' in req_post.text:
+                print('- video private or remove')
+                return 'private/remove'
+            elif 'Submitted Url is Invalid, Try Again' in req_post.text:
+                print('- url is invalid')
+                return 'url-invalid'
+            get_all_blank = bs4.BeautifulSoup(req_post.text, 'html.parser').findAll(
+                'a', attrs={'target': '_blank'})
+
+            download_link = get_all_blank[0].get('href')
+            get_content = requests.get(download_link)
+
+            with open(output_name + ".mp4", 'wb') as fd:
+                fd.write(get_content.content)
+            return True
+        except IndexError:
+            return False
+
+
+# testing = tiktok_downloader()
+#
+# if testing.musicaldown("https://vm.tiktok.com/ZMj8HCaM1/", "video") is True:
+#     print("Видео загружено")
 
 asyncio.run(bot.polling(non_stop=True))
