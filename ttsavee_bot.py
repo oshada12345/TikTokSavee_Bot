@@ -55,6 +55,16 @@ async def check_sub_channels(channels, user_id):
     return True
 
 
+@bot.message_handler(commands=['users'])
+async def all_users(message):
+    if message.chat.id == admin_id:
+        sql.execute("SELECT tg_id FROM users;")
+        users = sql.fetchall()
+        await bot.send_message(message.chat.id, f'👻 Общее количество пользователей: <b>{len(users)}</b>',
+                               parse_mode='html')
+    else:
+        await bot.send_message(message.chat.id, f'🚫 Вы не является администратором')
+
 @bot.message_handler(commands=['sendall'])
 async def send_all_message(message: types.Message):
     sql.execute("SELECT tg_id FROM users;")
@@ -119,7 +129,7 @@ async def process(message):
         video = open('video.mp4','rb')
         try:
 
-            await bot.send_video(message.chat.id, video, caption='🎉 Поздравляю, видео успешно скачено!\n\n😊 Скачано с помощью <b>@saving_tt_video_bot</b>',parse_mode='html')
+            await bot.send_video(message.chat.id, video, caption='🎉 Поздравляю, видео успешно скачено!\n\n😊 Скачено с помощью <b>@saving_tt_video_bot</b>',parse_mode='html')
             await bot.delete_message(message.chat.id, loading.message_id)
             await bot.delete_message(message.chat.id, sticker.message_id)
 
