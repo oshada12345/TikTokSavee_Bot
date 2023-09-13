@@ -14,18 +14,30 @@ import re
 import sys
 import random
 from base64 import b64decode
+
 try:
     import requests
     import bs4
 except ImportError:
     sys.exit('- module not installed !')
 
-
 load_dotenv(find_dotenv())
 bot = AsyncTeleBot(os.getenv('TOKEN_BOT'))
 
 db = sqlite3.connect('db/ttsavee.db', check_same_thread=False)
+db_stat = sqlite3.connect('db/ttsavee_download.db', check_same_thread=False)
+
 sql = db.cursor()
+sql_stat = db_stat.cursor()
+
+sql_stat.execute("""CREATE TABLE IF NOT EXISTS download(
+    id integer PRIMARY KEY AUTOINCREMENT,
+    tg_id integer,
+    link text,
+    date date
+
+
+)""")
 
 sql.execute("""CREATE TABLE IF NOT EXISTS users(
     id integer PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +77,7 @@ async def all_users(message):
     else:
         await bot.send_message(message.chat.id, f'🚫 Вы не является администратором')
 
+
 @bot.message_handler(commands=['sendall'])
 async def send_all_message(message: types.Message):
     sql.execute("SELECT tg_id FROM users;")
@@ -92,8 +105,6 @@ async def download(url):
             return video
 
 
-
-
 @bot.message_handler(commands=['start'])
 async def command_start(message):
     # if await check_sub_channels(CHANNELS, message.chat.id):
@@ -105,7 +116,10 @@ async def command_start(message):
     if data is None:
         sql.execute("INSERT INTO users VALUES (?,?,?)", (None, tg_id, date))
         db.commit()
-        await bot.send_message(admin_id,f'👤 New user : {message.chat.id}')
+        if message.from_user.username != None:
+            await bot.send_message(admin_id, f'👤 New user : @{message.from_user.username} {message.chat.id}')
+        else:
+            await bot.send_message(admin_id, f'👤 New user : {message.chat.id}')
     img = open("img/start.png", "rb")
     await bot.send_photo(message.chat.id, img,
                          caption='<b>Привет! Добро пожаловать к нам в видеобот TikTokSavee!👋</b>\n\nМы рады видеть тебя здесь. Просто дайте мне ссылку на видео с TikTok, и я отправлю вам это видео без водяных знаков.\n\n<b>Наслаждайтесь просмотром! 🎉</b>\n Если у тебя есть какие-либо вопросы или запросы, не стесняйся спрашивать: <b>@maruvvvs</b> 😊📹',
@@ -120,33 +134,66 @@ async def command_start(message):
 @bot.message_handler()
 async def process(message):
     if re.compile('https://[a-zA-Z]+.tiktok.com/').match(message.text):
+        if message.from_user.username != None:
+            await bot.send_message(admin_id,
+                                   f'<b>Username: @{message.from_user.username}</b>\n<b>👤 User id:</b> {message.chat.id}\n<b>⛓ Link on video</b>: <code>{message.text}</code>\n<b>🟢 Status:</b> 📩 Link accepted!',
+                                   parse_mode='html')
+        else:
+            await bot.send_message(admin_id,
+                                   f'<b>👤 User:</b> {message.chat.id}\n<b>⛓ Link on video</b>: <code>{message.text}</code>\n<b>🟢 Status:</b> 📩 Link accepted!',
+                                   parse_mode='html')
+
         sticker = await bot.send_sticker(message.chat.id,
                                          "CAACAgIAAxkBAAEKIxtk6pqNbeyXirz3RDS4vp2oXIjzyQACeQAD5KDOB6RRas-jTv2HMAQ")
         loading = await bot.send_message(message.chat.id, '🕗 Ожидайте видео скачивается...')
         testing = tiktok_downloader()
         if testing.musicaldown(message.text, "video") is True:
             print("Видео загружено")
-        video = open('video.mp4','rb')
+        video = open('video.mp4', 'rb')
         try:
 
-            await bot.send_video(message.chat.id, video, caption='🎉 Поздравляю, видео успешно скачено!\n\n😊 Скачено с помощью <b>@saving_tt_video_bot</b>',parse_mode='html')
+            await bot.send_video(message.chat.id, video,
+                                 caption='🎉 Поздравляю, видео успешно скачено!\n\n😊 Скачено с помощью <b>@saving_tt_video_bot</b>',
+                                 parse_mode='html')
             await bot.delete_message(message.chat.id, loading.message_id)
             await bot.delete_message(message.chat.id, sticker.message_id)
+            date = datetime.datetime.now()
+            tg_id = message.from_user.id
+            link = message.text
+            sql_stat.execute("INSERT INTO download VALUES (?,?,?,?)", (None, tg_id,link, date))
+            db_stat.commit()
+            if message.from_user.username != None:
+                await bot.send_message(admin_id,
+                                       f'<b>Username: @{message.from_user.username}</b>\n<b>👤 User id:</b> {message.chat.id}\n<b>⛓ Link on video</b>: <code>{message.text}</code>\n<b>🟢 Status:</b>  ✅ Video sent',
+                                       parse_mode='html')
+            else:
+                await bot.send_message(admin_id,
+                                       f'<b>👤 User:</b> {message.chat.id}\n<b>⛓ Link on video</b>: <code>{message.text}</code>\n<b>🟢 Status:</b>  ✅ Video sent',
+                                       parse_mode='html')
 
 
         except:
             await bot.delete_message(message.chat.id, loading.message_id)
             await bot.delete_message(message.chat.id, sticker.message_id)
             await bot.send_sticker(message.chat.id,
-                                             "CAACAgIAAxkBAAEKPMZk-KebbYWGOpgXZStXyiM8SUjfLgACZwAD5KDOB6GjeJZ2Piz9MAQ")
+                                   "CAACAgIAAxkBAAEKPMZk-KebbYWGOpgXZStXyiM8SUjfLgACZwAD5KDOB6GjeJZ2Piz9MAQ")
             await bot.send_message(message.chat.id, '🥺 Ошибка при скачивания видео ,попробуйте снова...')
             # os.remove("video.mp4")
 
+            if message.from_user.username != None:
+                await bot.send_message(admin_id,
+                                       f'<b>Username: @{message.from_user.username}</b>\n<b>👤 User id:</b> {message.chat.id}\n<b>⛓ Link on video</b>: <code>{message.text}</code>\n<b>🔴 Status:</b> ⛔️ Error at video sent!',
+                                       parse_mode='html')
+            else:
+                await bot.send_message(admin_id,
+                                       f'<b>👤 User:</b> {message.chat.id}\n<b>⛓ Link on video</b>: <code>{message.text}</code>\n<b>🔴 Status:</b> ⛔️ Error at video sent!',
+                                       parse_mode='html')
     else:
         await bot.send_message(message.chat.id,
                                '⛔️ В данный момент возможность загрузки видео доступна только из <b>TikTok</b>',
                                parse_mode='html')
     os.remove("video.mp4")
+
 
 @bot.callback_query_handler(func=lambda callback: callback.data == "subchanneldone")
 async def callback_handler(callback):
