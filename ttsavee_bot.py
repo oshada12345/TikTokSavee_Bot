@@ -25,12 +25,12 @@ load_dotenv(find_dotenv())
 bot = AsyncTeleBot(os.getenv('TOKEN_BOT'))
 
 db = sqlite3.connect('db/ttsavee.db', check_same_thread=False)
-db_stat = sqlite3.connect('db/ttsavee_download.db', check_same_thread=False)
+# db_stat = sqlite3.connect('db/ttsavee_download.db', check_same_thread=False)
 
 sql = db.cursor()
-sql_stat = db_stat.cursor()
+# sql_stat = db_stat.cursor()
 
-sql_stat.execute("""CREATE TABLE IF NOT EXISTS download(
+sql.execute("""CREATE TABLE IF NOT EXISTS download(
     id integer PRIMARY KEY AUTOINCREMENT,
     tg_id integer,
     link text,
@@ -104,7 +104,13 @@ async def download(url):
             video = data['video_data']['nwm_video_url_HQ']
             return video
 
-
+@bot.message_handler(commands=['download_db'])
+async def command_download_db(message):
+    if message.chat.id == admin_id:
+        db = open('db/ttsavee.db','rb')
+        await bot.send_document(message.chat.id,db)
+    else:
+        await bot.send_message(message.chat.id,'Вы не являетесь администратором!')
 @bot.message_handler(commands=['start'])
 async def command_start(message):
     # if await check_sub_channels(CHANNELS, message.chat.id):
@@ -160,8 +166,9 @@ async def process(message):
             date = datetime.datetime.now()
             tg_id = message.from_user.id
             link = message.text
-            sql_stat.execute("INSERT INTO download VALUES (?,?,?,?)", (None, tg_id,link, date))
-            db_stat.commit()
+            sql.execute("INSERT INTO download VALUES (?,?,?,?)", (None, tg_id,link, date))
+            db.commit()
+
             if message.from_user.username != None:
                 await bot.send_message(admin_id,
                                        f'<b>Username: @{message.from_user.username}</b>\n<b>👤 User id:</b> {message.chat.id}\n<b>⛓ Link on video</b>: <code>{message.text}</code>\n<b>🟢 Status:</b>  ✅ Video sent',
